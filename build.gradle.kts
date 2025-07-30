@@ -30,6 +30,11 @@ dependencies {
     implementation("io.ktor:ktor-serialization-kotlinx-json:$ktorVersion")
     implementation("io.ktor:ktor-utils:$ktorVersion")
     
+    // Ktor server dependencies for HTTP transport
+    implementation("io.ktor:ktor-server-core:$ktorVersion")
+    implementation("io.ktor:ktor-server-netty:$ktorVersion")
+    implementation("io.ktor:ktor-server-cors:$ktorVersion")
+    
     // Google Calendar API dependencies
     implementation("com.google.apis:google-api-services-calendar:$googleCalendarVersion")
     implementation("com.google.auth:google-auth-library-oauth2-http:$googleAuthVersion")
@@ -50,6 +55,22 @@ tasks.register<JavaExec>("auth") {
     description = "Set up Google Calendar OAuth2 authentication"
     classpath = sourceSets.main.get().runtimeClasspath
     mainClass.set("io.modelcontextprotocol.sample.server.AuthSetupKt")
+}
+
+tasks.register<JavaExec>("runHttp") {
+    group = "application"
+    description = "Run Google Calendar MCP Server with HTTP transport"
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("io.modelcontextprotocol.sample.server.MainKt")
+    systemProperty("server.mode", "http")
+}
+
+tasks.register<JavaExec>("runMcp") {
+    group = "application"
+    description = "Run Google Calendar MCP Server with MCP protocol"
+    classpath = sourceSets.main.get().runtimeClasspath
+    mainClass.set("io.modelcontextprotocol.sample.server.MainKt")
+    systemProperty("server.mode", "mcp")
 }
 
 kotlin {

@@ -1,15 +1,24 @@
 package io.modelcontextprotocol.sample.server
 
-import io.modelcontextprotocol.kotlin.sdk.*
+import io.ktor.utils.io.streams.asInput
+import io.modelcontextprotocol.kotlin.sdk.CallToolResult
+import io.modelcontextprotocol.kotlin.sdk.Implementation
+import io.modelcontextprotocol.kotlin.sdk.ServerCapabilities
+import io.modelcontextprotocol.kotlin.sdk.TextContent
+import io.modelcontextprotocol.kotlin.sdk.Tool
 import io.modelcontextprotocol.kotlin.sdk.server.Server
 import io.modelcontextprotocol.kotlin.sdk.server.ServerOptions
 import io.modelcontextprotocol.kotlin.sdk.server.StdioServerTransport
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.runBlocking
-import io.ktor.utils.io.streams.*
 import kotlinx.io.asSink
 import kotlinx.io.buffered
-import kotlinx.serialization.json.*
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonObject
 
 fun `run mcp server`() {
     val credentialsPath = System.getenv("GOOGLE_CREDENTIALS_PATH") 
@@ -26,7 +35,7 @@ fun `run mcp server`() {
             capabilities = ServerCapabilities(tools = ServerCapabilities.Tools(listChanged = true))
         )
     )
-    
+
     // List events tool
     server.addTool(
         name = "list_events",
@@ -304,6 +313,115 @@ fun `run mcp server`() {
             CallToolResult(content = listOf(TextContent(result)))
         } catch (e: Exception) {
             CallToolResult(content = listOf(TextContent("Error deleting event: ${e.message}")))
+        }
+    }
+    
+    // Current datetime tool
+    server.addTool(
+        name = "current_datetime",
+        description = """
+            Get the current date and time in the specified timezone.
+            Parameters:
+            - timezone (optional): The timezone to get the current date and time in (e.g., 'UTC', 'America/New_York', 'Europe/London'). Defaults to UTC.
+        """.trimIndent(),
+        inputSchema = Tool.Input(
+            properties = buildJsonObject {
+                putJsonObject("timezone") {
+                    put("type", "string")
+                    put("description", "The timezone to get the current date and time in")
+                }
+            },
+            required = emptyList()
+        )
+    ) { request ->
+        try {
+            val timezone = request.arguments["timezone"]?.jsonPrimitive?.content ?: "UTC"
+            val result = DateTimeTools.getCurrentDateTime(timezone)
+            
+            val response = """
+                Current datetime: ${result.datetime}
+                Date: ${result.date}
+                Time: ${result.time}
+                Timezone: ${result.timezone}
+            """.trimIndent()
+            
+            CallToolResult(content = listOf(TextContent(response)))
+        } catch (e: Exception) {
+            CallToolResult(content = listOf(TextContent("Error getting current datetime: ${e.message}")))
+        }
+    }
+    
+    // Add datetime tool
+    server.addTool(
+        name = "add_datetime",
+        description = """
+            Add a duration to a date. Use this tool when you need to calculate offsets, such as tomorrow, in two days, etc.
+            Parameters:
+            - date: The date to add to in ISO format (e.g., '2023-05-20')
+            - days: The number of days to add
+            - hours: The number of hours to add
+            - minutes: The number of minutes to add
+        """.trimIndent(),
+        inputSchema = Tool.Input(
+            properties = buildJsonObject {
+                putJsonObject("date") {
+                    put("type", "string")
+                    put("description", "The date to add to in ISO format (e.g., '2023-05-20')")
+                }
+                putJsonObject("days") {
+                    put("type", "number")
+                    put("description", "The number of days to add")
+                }
+                putJsonObject("hours") {
+                    put("type", "number")
+                    put("description", "The number of hours to add")
+                }
+                putJsonObject("minutes") {
+                    put("type", "number")
+                    put("description", "The number of minutes to add")
+                }
+            },
+            required = listOf("date", "days", "hours", "minutes")
+        )
+    ) { request ->
+        try {
+            val date = request.arguments["date"]?.jsonPrimitive?.content ?: ""
+            val days = request.arguments["days"]?.jsonPrimitive?.intOrNull ?: 0
+            val hours = request.arguments["hours"]?.jsonPrimitive?.intOrNull ?: 0
+            val minutes = request.arguments["minutes"]?.jsonPrimitive?.intOrNull ?: 0
+            
+            val result = DateTimeTools.addDateTime(date, days, hours, minutes)
+            
+            val response = buildString {
+                append("Date: ${result.date}")
+                if (result.originalDate.isBlank()) {
+                    append(" (starting from today)")
+                } else {
+                    append(" (starting from ${result.originalDate})")
+                }
+
+                if (result.daysAdded != 0 || result.hoursAdded != 0 || result.minutesAdded != 0) {
+                    append(" after adding")
+
+                    if (result.daysAdded != 0) {
+                        append(" ${result.daysAdded} days")
+                    }
+
+                    if (result.hoursAdded != 0) {
+                        if (result.daysAdded != 0) append(",")
+                        append(" ${result.hoursAdded} hours")
+                    }
+
+                    if (result.minutesAdded != 0) {
+                        if (result.daysAdded != 0 || result.hoursAdded != 0) append(",")
+                        append(" ${result.minutesAdded} minutes")
+                    }
+                }
+            }
+            
+            CallToolResult(content = listOf(TextContent(response)))
+        } catch (e: Exception) {
+            CallToolResult(content = listOf(TextContent("Error adding datetime: ${e.message}")))
         }
     }
     
